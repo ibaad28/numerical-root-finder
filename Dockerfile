@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt ./
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc g++ gfortran libopenblas-dev liblapack-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
@@ -16,8 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application files
 COPY . /app
 
-# Expose port for Fly.io
-EXPOSE 8080
+# Expose port for Render (Streamlit default is 8501)
+EXPOSE 8501
 
-# Run Streamlit on the port Fly provides (use 8080 inside container)
-CMD ["streamlit", "run", "app.py", "--server.port", "8080", "--server.address", "0.0.0.0", "--server.headless", "true"]
+# Health check for Render
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+# Run Streamlit on port 8501
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
