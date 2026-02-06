@@ -1,5 +1,5 @@
-streamlit==1.32.0
-numpy==1.26.4
-pandas==2.2.2
+# Vercel requirements (without Streamlit)
+numpy==1.24.3
 sympy==1.12
-matplotlib==3.8.0
+flask==2.3.3
+# REMOVE: streamlit, pandas, matplotlib
