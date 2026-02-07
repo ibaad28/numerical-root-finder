@@ -1,2 +1,2 @@
-# No numpy, no flask - pure Python
-# That's it - nothing else needed!
+Flask==2.3.3
+gunicorn==20.1.0
