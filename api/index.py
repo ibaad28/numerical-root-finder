@@ -1,110 +1,108 @@
-from flask import Flask, request, jsonify
-import numpy as np
-import sympy as sp
+from http.server import BaseHTTPRequestHandler
 import json
 
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Numerical Root Finder API</title>
-    </head>
-    <body>
-        <h1>Numerical Root Finder API</h1>
-        <p>Use POST requests to <code>/api/root-finder</code></p>
-        <button onclick="test()">Test API</button>
-        <div id="result"></div>
-        <script>
-        async function test() {
-            const response = await fetch('/api/root-finder', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    function: "x**2 - 4",
-                    method: "bisection",
-                    a: 0,
-                    b: 3,
-                    tolerance: 0.0001
-                })
-            });
-            const data = await response.json();
-            document.getElementById('result').innerHTML = 
-                'Result: ' + JSON.stringify(data);
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {
+            "status": "healthy",
+            "service": "Numerical Root Finder API",
+            "version": "1.0"
         }
-        </script>
-    </body>
-    </html>
-    '''
-
-@app.route('/api/root-finder', methods=['POST'])
-def root_finder():
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
         
-        # Simple test calculation
-        func_str = data.get('function', 'x**2 - 4')
-        
-        # Use sympy to evaluate
-        x = sp.symbols('x')
-        expr = sp.sympify(func_str)
-        
-        # Test at midpoint
-        a = float(data.get('a', 0))
-        b = float(data.get('b', 3))
-        midpoint = (a + b) / 2
-        value = float(expr.subs(x, midpoint))
-        
-        return jsonify({
-            "success": True,
-            "function": func_str,
-            "midpoint": midpoint,
-            "value_at_midpoint": value,
-            "message": "Test calculation successful"
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Calculation failed"
-        }), 400
-
-@app.route('/api/health', methods=['GET'])
-def health():
-    return jsonify({
-        "status": "healthy",
-        "service": "Numerical Root Finder API",
-        "version": "1.0"
-    })
-
-# Vercel serverless function handler
-def handler(event, context):
-    from flask import Response
+        self.wfile.write(json.dumps(response).encode())
     
-    # Convert Vercel event to Flask request
-    with app.request_context({
-        'path': event['path'],
-        'method': event['httpMethod'],
-        'headers': event.get('headers', {}),
-        'query_string': event.get('queryStringParameters', {}),
-        'body': event.get('body', '')
-    }):
-        # Process the request
-        response = app.full_dispatch_request()
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
         
-        # Convert Flask response to Vercel format
-        return {
-            'statusCode': response.status_code,
-            'headers': dict(response.headers),
-            'body': response.get_data(as_text=True)
-        }
+        try:
+            data = json.loads(post_data.decode('utf-8'))
+            
+            # Simple test response
+            response = {
+                "success": True,
+                "message": "API is working!",
+                "received_data": data,
+                "test_calculation": "x^2 - 4 evaluated at x=2 gives 0"
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+            
+        except Exception as e:
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            error_response = {
+                "success": False,
+                "error": str(e),
+                "message": "Invalid JSON or processing error"
+            }
+            self.wfile.write(json.dumps(error_response).encode())
 
-# For local testing only
-if __name__ == '__main__':
-    app.run(debug=True, port=3000)
+# Vercel requires this exact structure
+def handler(request, context):
+    """
+    Vercel serverless function handler
+    request: Vercel request object
+    context: Vercel context object
+    """
+    from io import BytesIO
+    
+    # Create a mock HTTP request handler
+    class VercelHTTPRequest(BaseHTTPRequestHandler):
+        def __init__(self, request):
+            self.request = request
+            self.headers = self.parse_headers()
+            self.rfile = BytesIO(request.get('body', '').encode() if request.get('body') else b'')
+            self.wfile = BytesIO()
+            self.path = request.get('path', '/')
+            self.command = request.get('httpMethod', 'GET')
+            
+        def parse_headers(self):
+            headers = self.request.get('headers', {})
+            # Convert to lowercase keys for HTTP protocol
+            return {k.lower(): v for k, v in headers.items()}
+        
+        def send_response(self, code):
+            self.status_code = code
+            
+        def send_header(self, key, value):
+            if not hasattr(self, 'response_headers'):
+                self.response_headers = {}
+            self.response_headers[key] = value
+            
+        def end_headers(self):
+            pass
+        
+        def log_message(self, format, *args):
+            pass  # Silence logging
+    
+    # Process the request
+    vercel_request = VercelHTTPRequest(request)
+    
+    if request.get('httpMethod') == 'GET':
+        vercel_request.do_GET()
+    elif request.get('httpMethod') == 'POST':
+        vercel_request.do_POST()
+    else:
+        vercel_request.send_response(405)
+        vercel_request.send_header('Content-type', 'application/json')
+        vercel_request.end_headers()
+        vercel_request.wfile.write(json.dumps({
+            "error": "Method not allowed",
+            "allowed_methods": ["GET", "POST"]
+        }).encode())
+    
+    # Return Vercel response
+    return {
+        'statusCode': getattr(vercel_request, 'status_code', 200),
+        'headers': getattr(vercel_request, 'response_headers', {'Content-Type': 'application/json'}),
+        'body': vercel_request.wfile.getvalue().decode('utf-8')
+    }
