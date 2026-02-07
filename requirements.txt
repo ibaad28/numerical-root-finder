@@ -1,4 +1,2 @@
-# requirements.txt - MINIMAL VERSION (no numpy)
-flask==2.3.3
-sympy==1.12
-# That's it! Your API doesn't need numpy if you use sympy
+# No numpy, no flask - pure Python
+# That's it - nothing else needed!
